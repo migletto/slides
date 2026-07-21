@@ -3937,7 +3937,7 @@ async function callClaudeAPI(sysPrompt, messages, { temperature = 0, maxTokens =
   try {
     // Local mode: route through MCP channel server
     if (VELA_LOCAL_MODE && VELA_CHANNEL_PORT) {
-      const r = await fetch(`http://localhost:${VELA_CHANNEL_PORT}/action`, {
+      const r = await fetch(`/__vela_channel/action`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-vela-token": VELA_CHANNEL_TOKEN },
         signal: controller.signal,
         body: JSON.stringify({ action: "complete", _silent: true, system: sysPrompt, messages, temperature, max_tokens: maxTokens, _callType })
@@ -4532,7 +4532,7 @@ async function callVeraTeacher(lanes, selectedId, slideIndex, studentQuestion, c
     // Local mode: route through MCP channel server (no streaming)
     if (VELA_LOCAL_MODE && VELA_CHANNEL_PORT) {
       const timer = setTimeout(() => controller.abort(), 120000);
-      const r = await fetch(`http://localhost:${VELA_CHANNEL_PORT}/action`, {
+      const r = await fetch(`/__vela_channel/action`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-vela-token": VELA_CHANNEL_TOKEN },
         signal: controller.signal,
         body: JSON.stringify({ action: "complete", _silent: true, system: sysPrompt, messages, temperature: 0.3, max_tokens: 1500, _callType: "teacher" })
@@ -4877,7 +4877,7 @@ function setupLateReplyRecovery(lanes, branding, onUpdate, onToolCall, onFinaliz
   if (!VELA_LOCAL_MODE || !VELA_CHANNEL_PORT) return null;
   let sse = null;
   try {
-    sse = new EventSource(`http://localhost:${VELA_CHANNEL_PORT}/events`);
+    sse = new EventSource(`/__vela_channel/events`);
   } catch { return null; }
   const cleanup = () => { try { sse?.close(); } catch {} };
   const timeout = setTimeout(cleanup, 120000); // max 2 min wait

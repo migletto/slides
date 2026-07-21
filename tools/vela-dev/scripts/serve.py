@@ -16,6 +16,7 @@ Usage:
 
 import hashlib
 import hmac
+import http.client
 import http.cookies
 import http.server
 import json
@@ -35,7 +36,9 @@ from urllib.parse import unquote, quote
 
 
 # ── Security ──────────────────────────────────────────────────────────
-ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "0.0.0.0"}
+ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]", "0.0.0.0",
+                 # Deployed behind Traefik+tinyauth at this fixed domain (see docker-compose.prod.yml)
+                 "slides.nwowlabs.cloud"}
 DECK_EXT = ".vela"  # Only files with this extension are listed/served/accepted
 MAX_THREADS = 20
 
@@ -470,7 +473,11 @@ class VelaHTTPHandler(http.server.BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         if not origin:
             return True  # same-origin requests may omit Origin
-        if origin == "http://" + (self.headers.get("Host") or ""):
+        host = self.headers.get("Host") or ""
+        # https when this process sits behind a TLS-terminating reverse proxy
+        # (e.g. Traefik) -- the browser's Origin scheme reflects the public
+        # edge, not this process's own plain-http socket.
+        if origin == "http://" + host or origin == "https://" + host:
             return True
         self.send_error(403, "Forbidden: invalid Origin")
         return False
@@ -521,6 +528,8 @@ class VelaHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._handle_serve_deck()
         elif self.path.startswith("/poll/"):
             self._handle_deck_poll()
+        elif self.path == "/__vela_channel/events":
+            self._proxy_channel_events()
         elif self.path in self.static_files:
             content, ctype = self.static_files[self.path]
             self._serve(content, ctype, cache="max-age=86400")
@@ -530,8 +539,99 @@ class VelaHTTPHandler(http.server.BaseHTTPRequestHandler):
     def _route_folder_post(self):
         if self.path.startswith("/save/"):
             self._handle_deck_save()
+        elif self.path == "/__vela_channel/action":
+            self._proxy_channel_action()
         else:
             self.send_error(404)
+    # ── Vera channel proxy (same-origin -> loopback agent_backend) ──────
+    # The browser can be anywhere; only this process and the channel it spawned
+    # share "localhost". So the page talks to us (same-origin, already gated by
+    # _check_host/_check_auth/_check_origin above) and we relay to the
+    # loopback-only channel server on 127.0.0.1, which never listens on a
+    # routable interface -- see agent_backend.py's SECURITY notes.
+
+    def _proxy_channel_action(self):
+        srv = self.server_ref
+        if not srv or not srv.ai_enabled or not srv.channel_port:
+            self.send_error(404)
+            return
+        length = self._safe_content_length()
+        if length > 16 * 1024 * 1024:
+            self.send_error(413)
+            return
+        body = self.rfile.read(length) if length else b""
+        headers = {"Content-Type": "application/json", "Host": f"127.0.0.1:{srv.channel_port}"}
+        token = self.headers.get("x-vela-token")
+        if token:
+            headers["x-vela-token"] = token
+        try:
+            conn = http.client.HTTPConnection("127.0.0.1", srv.channel_port, timeout=125)
+            conn.request("POST", "/action", body=body, headers=headers)
+            resp = conn.getresponse()
+            resp_body = resp.read()
+            conn.close()
+        except (OSError, http.client.HTTPException) as e:
+            self.send_error(502, f"channel unreachable: {e}")
+            return
+        self.send_response(resp.status)
+        self.send_header("Content-Type", resp.getheader("Content-Type", "application/json"))
+        self.send_header("Content-Length", str(len(resp_body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(resp_body)
+
+    def _proxy_channel_events(self):
+        srv = self.server_ref
+        if not srv or not srv.ai_enabled or not srv.channel_port:
+            self.send_error(404)
+            return
+        # Raw socket, not http.client: the upstream /events response has no
+        # Content-Length and isn't chunked (HTTP/1.1 "read until close"
+        # framing), which http.client's reader cannot size -- it blocks
+        # instead of returning the bytes already sitting in the socket buffer.
+        try:
+            upstream = socket.create_connection(("127.0.0.1", srv.channel_port), timeout=10)
+            upstream.sendall(
+                f"GET /events HTTP/1.1\r\nHost: 127.0.0.1:{srv.channel_port}\r\n"
+                f"Connection: keep-alive\r\n\r\n".encode("ascii")
+            )
+            upstream.settimeout(140)
+        except OSError:
+            self.send_error(502)
+            return
+        buf = b""
+        try:
+            while b"\r\n\r\n" not in buf:
+                chunk = upstream.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+        except OSError:
+            upstream.close()
+            self.send_error(502)
+            return
+        _, _, leftover = buf.partition(b"\r\n\r\n")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        try:
+            if leftover:
+                self.wfile.write(leftover)
+                self.wfile.flush()
+            while True:
+                chunk = upstream.recv(4096)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            pass
+        finally:
+            upstream.close()
+
 
     def _handle_list_decks(self):
         srv = self.server_ref
