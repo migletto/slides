@@ -73,7 +73,7 @@ async function callClaudeAPIActive(sysPrompt, messages, { temperature = 0, maxTo
   try {
     // Local mode: route through MCP channel server
     if (VELA_LOCAL_MODE && VELA_CHANNEL_PORT) {
-      const r = await fetch(`http://localhost:${VELA_CHANNEL_PORT}/action`, {
+      const r = await fetch(`/__vela_channel/action`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-vela-token": VELA_CHANNEL_TOKEN },
         signal: controller.signal,
         body: JSON.stringify({ action: "complete", _silent: true, system: sysPrompt, messages, temperature, max_tokens: maxTokens, _callType })
@@ -671,7 +671,7 @@ async function callVeraTeacher(lanes, selectedId, slideIndex, studentQuestion, c
     // Local mode: route through MCP channel server (no streaming)
     if (VELA_LOCAL_MODE && VELA_CHANNEL_PORT) {
       timer = setTimeout(() => controller.abort(), 120000);
-      const r = await fetch(`http://localhost:${VELA_CHANNEL_PORT}/action`, {
+      const r = await fetch(`/__vela_channel/action`, {
         method: "POST", headers: { "Content-Type": "application/json", "x-vela-token": VELA_CHANNEL_TOKEN },
         signal: controller.signal,
         body: JSON.stringify({ action: "complete", _silent: true, system: sysPrompt, messages, temperature: 0.3, max_tokens: 1500, _callType: "teacher" })
