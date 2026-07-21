@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@babel/standalone':
-        specifier: ^7.26.10
-        version: 7.26.10
+        specifier: ^8.0.2
+        version: 8.0.2
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1
@@ -44,9 +44,9 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@babel/standalone@7.26.10':
-    resolution: {integrity: sha512-AYXK0hLWfEaK9WAePJqs30qro09a8w7X3YZzjukqtLXreE7xBZYdi5EMrP87T4UrVqmQ9tIX6L6SeTu5LDh3zw==}
-    engines: {node: '>=6.9.0'}
+  '@babel/standalone@8.0.2':
+    resolution: {integrity: sha512-fxVjA+dyCXC6tZm8sp21egVF0WVpPRnJOhmfG4WavISe2otyfOLleh+owitHWMhILTdjd7W0mfpadS16cj8LBw==}
+    engines: {node: ^22.18.0 || >=24.11.0}
 
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
@@ -263,7 +263,7 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@babel/standalone@7.26.10': {}
+  '@babel/standalone@8.0.2': {}
 
   '@bramus/specificity@2.4.2':
     dependencies:
