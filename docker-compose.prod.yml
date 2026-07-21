@@ -1,0 +1,27 @@
+name: vela-slides-prod
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vela-slides-app
+    restart: unless-stopped
+    environment:
+      HOME: /root
+    volumes:
+      # Presentations persist here, editable from the code-server workspace too.
+      - ./decks:/app/decks
+      # Reuses this VPS Claude Code session's OAuth credentials so Vera (the
+      # in-app AI assistant) can answer edit requests without a separate API key.
+      # Read-only: if the host session's token gets refreshed, restart this
+      # container to pick up the new file.
+      - /home/claude/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      - /home/claude/.claude.json:/root/.claude.json:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.slides.rule: Host(`slides.nwowlabs.cloud`)
+      traefik.http.routers.slides.entrypoints: websecure
+      traefik.http.routers.slides.tls.certresolver: letsencrypt
+      traefik.http.routers.slides.middlewares: tinyauth
+      traefik.http.services.slides.loadbalancer.server.port: "3030"
