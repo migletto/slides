@@ -1,11 +1,11 @@
-name: vela-slides-prod
+name: miguel-vela-slides-prod
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: vela-slides-app
+    container_name: miguel-vela-slides-app
     restart: unless-stopped
     environment:
       HOME: /root
